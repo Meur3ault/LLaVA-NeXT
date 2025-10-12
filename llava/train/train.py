@@ -246,6 +246,9 @@ def find_all_linear_names(model):
     for name, module in model.named_modules():
         if any(mm_keyword in name for mm_keyword in multimodal_keywords):
             continue
+        # Skip Identity modules as they are not supported by PEFT LoRA
+        if isinstance(module, torch.nn.Identity):
+            continue
         if isinstance(module, cls):
             names = name.split(".")
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
