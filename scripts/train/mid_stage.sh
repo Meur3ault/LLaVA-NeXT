@@ -67,7 +67,7 @@ BASE_RUN_NAME="llavanext-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mlp2
 PRETRAIN_PROJECTOR="./checkpoints/projectors/${BASE_RUN_NAME}/mm_projector.bin"
 
 # Mid Stage name
-RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4"
+RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4_lora"
 
 echo "============================================"
 echo "Mid Stage Training Configuration"
@@ -109,7 +109,7 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --gradient_accumulation_steps ${Accumulation_steps} \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
-    --save_steps 200 \
+    --save_steps 1 \
     --save_total_limit 1 \
     --learning_rate 5e-6 \
     --weight_decay 0. \
@@ -126,7 +126,7 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --torch_compile_backend "inductor" \
     --dataloader_drop_last True \
     --frames_upbound 32 \
-    --attn_implementation sdpa \
+    --attn_implementation flash_attention_2 \
 
 #     --model_max_length 32768 \
 #    The orginal resolution is --image_grid_pinpoints  "[[768,768],[384,768],[384,1152],[768,384],[1152,384]]" \ 
