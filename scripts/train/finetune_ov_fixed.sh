@@ -1,80 +1,76 @@
 export OMP_NUM_THREADS=8
-# export NCCL_IB_DISABLE=0
-# export NCCL_IB_GID_INDEX=3
-# export NCCL_SOCKET_IFNAME=eth0
-# export NCCL_DEBUG=INFO
 
-# training on single local computer
+# 修复NCCL和CUDA内存问题
 export NCCL_IB_DISABLE=1              
-export NCCL_P2P_DISABLE=0             
+export NCCL_P2P_DISABLE=1             
 export NCCL_SOCKET_IFNAME=lo          
-export NCCL_DEBUG=INFO
+export NCCL_DEBUG=WARN
+export NCCL_BUFFSIZE=2097152
+export NCCL_NTHREADS=4
 
-# CUDA library path - fix Triton compilation issue
+# CUDA内存优化
 export CUDA_HOME=/usr/local/cuda
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64:$LIBRARY_PATH
 export PATH=$CUDA_HOME/bin:$PATH
 
-# Use gcc wrapper to add library paths for Triton compilation
+# 内存管理优化
+export PYTORCH_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+export CUDA_LAUNCH_BLOCKING=0
+
+# 清理GPU内存
+export CUDA_VISIBLE_DEVICES=0
+
+# 使用gcc wrapper
 export CC=/home/zhou/LLaVA-NeXT/gcc_wrapper.sh
 export CXX=/usr/bin/g++
 
-# Triton environment variables to avoid compilation issues
+# Triton环境变量
 export TRITON_CACHE_DIR=/tmp/triton_cache
 export TRITON_PRINT_AUTOTUNING=0
 
-# Fix libstdc++ version issue for DeepSpeed CPU offload
-# Use system libstdc++ instead of conda's outdated version
+# 修复libstdc++版本问题
 export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:$LD_PRELOAD
 
-# Memory optimization
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+# DeepSpeed优化
 export DS_BUILD_CPU_ADAM=0
 export DS_BUILD_FUSED_ADAM=0
-
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #,max_split_size_mb:1024
 
 export NUM_GPUS=1           
 export NNODES=1            
 export RANK=0              
 export ADDR=localhost       
-export PORT=29500   
+export PORT=29500     
 
-LLM_VERSION="Qwen/Qwen2-0.5B-Instruct" #Qwen/Qwen2-0.5B-Instruct or Qwen/Qwen2-7B-Instruct
-# for 7b model we recommend bs=1, accum=2, 16 nodes, 128 gpus, lr=1e-5, warmup=0.03
-# for 72b model we recommend bs=1, accum=1, 32 nodes, 256 gpus, lr=1e-5, warmup=0.03
+LLM_VERSION="Qwen/Qwen2-0.5B-Instruct"
 LLM_VERSION_CLEAN="${LLM_VERSION//\//_}"
 VISION_MODEL_VERSION="google/siglip-so400m-patch14-384"
 VISION_MODEL_VERSION_CLEAN="${VISION_MODEL_VERSION//\//_}"
 
-# Training config
-Batchsize=1                              # Sub-batchsize for accumulation
-Accumulation_steps=$((8 / Batchsize)) # original Accumulation steps = 512 / Batchsize
+# 更保守的训练配置
+Batchsize=1
+Accumulation_steps=4  # 减少累积步数
 echo "Batch size: ${Batchsize}, Accumulation steps: ${Accumulation_steps}"
-
-############### Pretrain ################
-
-BASE_RUN_NAME="llavanext-google_siglip-so400m-patch14-384-Qwen_Qwen2-0.5B-Instruct-mlp2x_gelu-pretrain_blip558k_plain"
-echo "BASE_RUN_NAME: ${BASE_RUN_NAME}"
 
 ############### Finetune ################
 
-# Stage 2
 PROMPT_VERSION="qwen_1_5"
-RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-si_stage_am9" 
-PREV_STAGE_CHECKPOINT="./checkpoints/onevision/llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4" # replace it with your last checkpoint training from mid stage
+RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-ov_stage_am9_fixed" 
+PREV_STAGE_CHECKPOINT="./checkpoints/onevision/llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-si_stage_am9"
 echo "PREV_STAGE_CHECKPOINT: ${PREV_STAGE_CHECKPOINT}"
-echo "MID_RUN_NAME: ${RUN_NAME}"
+echo "RUN_NAME: ${RUN_NAME}"
 
+# 清理GPU内存
+python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
 
 ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NNODES}" --node_rank="${RANK}" --master_addr="${ADDR}" --master_port="${PORT}" \
     llava/train/train_mem.py \
-    --deepspeed scripts/zero3.json \
+    --deepspeed scripts/zero3_optimized.json \
     --model_name_or_path $PREV_STAGE_CHECKPOINT \
     --version $PROMPT_VERSION \
-    --data_path ./scripts/train/nano_single_image.yaml \
-    --image_folder ./data/images/single \
+    --data_path ./scripts/train/nano_onevision.yaml \
+    --image_folder ./data/images \
     --video_folder ./data/videos \
     --mm_tunable_parts="mm_mlp_adapter,mm_language_model" \
     --vision_tower ${VISION_MODEL_VERSION} \
@@ -91,11 +87,11 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --output_dir ./checkpoints/onevision/$RUN_NAME \
     --num_train_epochs 1 \
     --per_device_train_batch_size ${Batchsize} \
-    --per_device_eval_batch_size 4 \
+    --per_device_eval_batch_size 2 \
     --gradient_accumulation_steps ${Accumulation_steps} \
     --evaluation_strategy "no" \
-    --save_strategy "steps" \
-    --save_steps 500 \
+    --save_strategy "epoch" \
+    --save_steps 1 \
     --save_total_limit 1 \
     --learning_rate 5e-6 \
     --weight_decay 0. \
@@ -105,22 +101,12 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --tf32 True \
     --model_max_length 2048 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 1 \
+    --dataloader_num_workers 0 \
     --lazy_preprocess True \
     --report_to wandb \
     --torch_compile False \
     --dataloader_drop_last True \
-    --frames_upbound 8 \
-    --attn_implementation flash_attention_2 \
-    # --lora_enable True \
-    # --lora_r 4 \
-    # --lora_alpha 8 \
-    # --lora_dropout 0.0 \
-    # --lora_bias "none" \
-    # --image_aspect_ratio anyres_max_2 \
-    # --mm_patch_merge_type spatial_unpad \
-#    --mm_vision_tower_lr=2e-6 \
-#     --model_max_length 32768 \
-#    The orginal resolution is --image_grid_pinpoints  "(1x1),...,(6x6)" \ [[384,384],[384,768],[768,384]]
-exit 0;
+    --frames_upbound 4 \
+    --attn_implementation flash_attention_2
 
+exit 0;

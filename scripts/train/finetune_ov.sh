@@ -32,7 +32,7 @@ export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:$LD_PRELOAD
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 export DS_BUILD_CPU_ADAM=0
 export DS_BUILD_FUSED_ADAM=0
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #,max_split_size_mb:1024
 
 export NUM_GPUS=1           
 export NNODES=1            
@@ -49,7 +49,7 @@ VISION_MODEL_VERSION_CLEAN="${VISION_MODEL_VERSION//\//_}"
 
 # Training config
 Batchsize=1                              # Sub-batchsize for accumulation
-Accumulation_steps=$((16 / Batchsize)) # original Accumulation steps = 512 / Batchsize
+Accumulation_steps=$((8 / Batchsize)) # original Accumulation steps = 512 / Batchsize
 echo "Batch size: ${Batchsize}, Accumulation steps: ${Accumulation_steps}"
 
 ############### Pretrain ################
@@ -61,8 +61,9 @@ echo "BASE_RUN_NAME: ${BASE_RUN_NAME}"
 
 # Stage 2
 PROMPT_VERSION="qwen_1_5"
-RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-ov_stage_am9_lora" 
-PREV_STAGE_CHECKPOINT="./checkpoints/onevision/llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-si_stage_am9_lora" # replace it with your last checkpoint training from single image collection
+RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-ov_stage_am9" 
+PREV_STAGE_CHECKPOINT="./checkpoints/onevision/llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-si_stage_am9" # replace it with your last checkpoint training from single image collection
+#PREV_STAGE_CHECKPOINT="./checkpoints/onevision/llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4_lora"
 echo "PREV_STAGE_CHECKPOINT: ${PREV_STAGE_CHECKPOINT}"
 echo "MID_RUN_NAME: ${RUN_NAME}"
 
@@ -71,27 +72,22 @@ echo "MID_RUN_NAME: ${RUN_NAME}"
 
 ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NNODES}" --node_rank="${RANK}" --master_addr="${ADDR}" --master_port="${PORT}" \
     llava/train/train_mem.py \
-    --deepspeed scripts/zero3_offload_aggressive.json \
+    --deepspeed scripts/zero3_offload_fixed.json \
     --model_name_or_path $PREV_STAGE_CHECKPOINT \
-    --lora_weight_path $PREV_STAGE_CHECKPOINT \
     --version $PROMPT_VERSION \
     --data_path ./scripts/train/nano_onevision.yaml \
     --image_folder ./data/images \
     --video_folder ./data/videos \
     --mm_tunable_parts="mm_mlp_adapter,mm_language_model" \
-    --lora_enable True \
-    --lora_r 4 \
-    --lora_alpha 8 \
-    --lora_dropout 0 \
-    --lora_bias "none" \
     --vision_tower ${VISION_MODEL_VERSION} \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
     --group_by_modality_length True \
-    --image_aspect_ratio pad \
-    --mm_patch_merge_type flat \
+    --image_aspect_ratio anyres_max_0 \
+    --image_grid_pinpoints  "[[384,384]]" \
+    --mm_patch_merge_type spatial_unpad \
     --bf16 True \
     --run_name $RUN_NAME \
     --output_dir ./checkpoints/onevision/$RUN_NAME \
@@ -100,25 +96,29 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps ${Accumulation_steps} \
     --evaluation_strategy "no" \
-    --save_strategy "epoch" \
-    --save_steps 1 \
+    --save_strategy "steps" \
+    --save_steps 500 \
     --save_total_limit 1 \
-    --learning_rate 1.3e-7 \
+    --learning_rate 5e-6 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 True \
-    --model_max_length 4096 \
+    --model_max_length 6144 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 1 \
     --lazy_preprocess True \
     --report_to wandb \
     --torch_compile False \
-    --torch_compile_backend "inductor" \
     --dataloader_drop_last True \
-    --frames_upbound 8 \
+    --frames_upbound 7 \
     --attn_implementation flash_attention_2 \
+# --lora_enable True \
+# --lora_r 4 \
+# --lora_alpha 8 \
+# --lora_dropout 0.0 \
+# --lora_bias "none" \
 # You can delete the sdpa attn_implementation if you want to use flash attn
 #    --mm_vision_tower_lr=2e-6 \
 #    --frames_upbound 32 \

@@ -461,6 +461,11 @@ class LLaVATrainer(Trainer):
             pass
         else:
             super(LLaVATrainer, self)._save(output_dir, state_dict)
+        
+        # Always save tokenizer for LoRA checkpoints
+        if getattr(self.args, "lora_enable", False) and output_dir is not None:
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(output_dir)
 
 
 class LLaVADPOTrainer(DPOTrainer):
@@ -502,23 +507,7 @@ class LLaVADPOTrainer(DPOTrainer):
                 self.model.config.save_pretrained(output_dir)
                 torch.save(weight_to_save, os.path.join(output_dir, f"mm_projector.bin"))
         else:
-            # super(LLaVADPOTrainer, self)._save_checkpoint(model, trial, metrics)
-            # print(type(model))
-            # from transformers.modeling_utils import unwrap_model
-            # print(type(unwrap_model(model)))
-            # print(unwrap_model(model).config)
-            if self.args.lora_enable:
-                from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
-
-                checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
-                run_dir = self._get_output_dir(trial=trial)
-                output_dir = os.path.join(run_dir, checkpoint_folder)
-                from transformers.modeling_utils import unwrap_model
-
-                unwrapped_model = unwrap_model(model)
-                self.save_my_lora_ckpt(output_dir, self.args, unwrapped_model)
-            else:
-                super(LLaVADPOTrainer, self)._save_checkpoint(model, trial, metrics)
+            super(LLaVADPOTrainer, self)._save_checkpoint(model, trial, metrics)
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         if getattr(self.args, "tune_mm_mlp_adapter", False):

@@ -49,7 +49,7 @@ VISION_MODEL_VERSION_CLEAN="${VISION_MODEL_VERSION//\//_}"
 
 # Training config
 Batchsize=1                              # Sub-batchsize for accumulation (reduced for single GPU)
-Accumulation_steps=$(((256 / 2) / Batchsize)) # Accumulation steps = 512 / Batchsize
+Accumulation_steps=$((8 / Batchsize)) # Accumulation steps = 512 / Batchsize
 echo "Batch size: ${Batchsize}, Accumulation steps: ${Accumulation_steps}"
 
 ############### Pretrain ################
@@ -67,7 +67,7 @@ BASE_RUN_NAME="llavanext-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mlp2
 PRETRAIN_PROJECTOR="./checkpoints/projectors/${BASE_RUN_NAME}/mm_projector.bin"
 
 # Mid Stage name
-RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4_lora"
+RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-mid_stage_am4"
 
 echo "============================================"
 echo "Mid Stage Training Configuration"
@@ -86,11 +86,6 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --image_folder ./data/images \
     --pretrain_mm_mlp_adapter ${PRETRAIN_PROJECTOR} \
     --mm_tunable_parts="mm_mlp_adapter,mm_language_model" \
-    --lora_enable True \
-    --lora_r 4 \
-    --lora_alpha 8 \
-    --lora_dropout 0.0 \
-    --lora_bias "none" \
     --vision_tower ${VISION_MODEL_VERSION} \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \
@@ -109,7 +104,7 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --gradient_accumulation_steps ${Accumulation_steps} \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
-    --save_steps 1 \
+    --save_steps 1000 \
     --save_total_limit 1 \
     --learning_rate 5e-6 \
     --weight_decay 0. \
@@ -117,17 +112,20 @@ ACCELERATE_CPU_AFFINITY=1 torchrun --nproc_per_node="${NUM_GPUS}" --nnodes="${NN
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 True \
-    --model_max_length 32768 \
+    --model_max_length 4096 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 1 \
     --lazy_preprocess True \
     --report_to wandb \
-    --torch_compile True \
-    --torch_compile_backend "inductor" \
+    --torch_compile False \
     --dataloader_drop_last True \
     --frames_upbound 32 \
     --attn_implementation flash_attention_2 \
-
+# --lora_enable True \
+# --lora_r 4 \
+# --lora_alpha 8 \
+# --lora_dropout 0.0 \
+# --lora_bias "none" \
 #     --model_max_length 32768 \
 #    The orginal resolution is --image_grid_pinpoints  "[[768,768],[384,768],[384,1152],[768,384],[1152,384]]" \ 
 # you could try to use flash attention instead of sdpa, but it needs to be installed manually.

@@ -33,6 +33,7 @@ import math
 import re
 import torch
 
+
 import transformers
 import tokenizers
 import deepspeed
@@ -243,18 +244,32 @@ def find_all_linear_names(model):
     cls = torch.nn.Linear
     lora_module_names = set()
     multimodal_keywords = ["mm_projector", "vision_tower", "vision_resampler"]
+    
     for name, module in model.named_modules():
+        # Skip multimodal components
         if any(mm_keyword in name for mm_keyword in multimodal_keywords):
             continue
+        
         # Skip Identity modules as they are not supported by PEFT LoRA
         if isinstance(module, torch.nn.Identity):
             continue
+            
         if isinstance(module, cls):
+            # Get the module name (last component of the path)
             names = name.split(".")
-            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+            module_name = names[0] if len(names) == 1 else names[-1]
+            
+            # Skip PEFT-specific layer names and wrapped layers
+            if module_name in ["lora_dropout", "lora_A", "lora_B", "lora_embedding_A", "lora_embedding_B", 
+                               "modules_to_save", "base_layer", "default"]:
+                continue
+            
+            lora_module_names.add(module_name)
 
     if "lm_head" in lora_module_names:  # needed for 16-bit
         lora_module_names.remove("lm_head")
+    
+    print(f"[DEBUG] Found LoRA target modules: {sorted(list(lora_module_names))}")
     return list(lora_module_names)
 
 
@@ -1485,7 +1500,6 @@ def train(attn_implementation=None):
                 ),
             )
         )
-
     model = get_model(model_args, training_args, bnb_model_from_pretrained_args)
     model.config.use_cache = False
     if model_args.rope_scaling_factor is not None and model_args.rope_scaling_type is not None:
@@ -1517,12 +1531,12 @@ def train(attn_implementation=None):
         from peft import LoraConfig, get_peft_model
 
         lora_config = LoraConfig(
-            r=training_args.lora_r,
-            lora_alpha=training_args.lora_alpha,
-            target_modules=find_all_linear_names(model),
-            lora_dropout=training_args.lora_dropout,
-            bias=training_args.lora_bias,
-            task_type="CAUSAL_LM",
+                r=training_args.lora_r,
+                lora_alpha=training_args.lora_alpha,
+                target_modules=find_all_linear_names(model),
+                lora_dropout=training_args.lora_dropout,
+                bias=training_args.lora_bias,
+                task_type="CAUSAL_LM",
         )
         if training_args.bits == 16:
             if training_args.bf16:
@@ -1531,6 +1545,58 @@ def train(attn_implementation=None):
                 model.to(torch.float16)
         rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
+        ################ code refactoring
+        # from peft import LoraConfig, get_peft_model, PeftModel
+        # # Check if model already has LoRA adapters loaded
+        # # Method 1: Check if it's a PeftModel instance
+        # # Method 2: Check if model has lora_A/lora_B submodules (LoRA structure exists)
+        # has_lora_modules = any("lora_A" in name or "lora_B" in name for name, _ in model.named_modules())
+        
+        # rank0_print(f"[DEBUG] Model type: {type(model)}")
+        # rank0_print(f"[DEBUG] Is PeftModel: {isinstance(model, PeftModel)}")
+        # rank0_print(f"[DEBUG] Has LoRA modules: {has_lora_modules}")
+        # # After transformers reading the model, it would not automatically convert to the PeftModel format
+        # # So we have to do it manually
+        # if True:#isinstance(model, PeftModel) or has_lora_modules: # or has_lora_modules
+        #     if os.path.exists(os.path.join(training_args.lora_weight_path, "non_lora_trainables.bin")):
+        #         non_lora_trainables = torch.load(os.path.join(training_args.lora_weight_path, "non_lora_trainables.bin"))
+        #     else:
+        #         # this is probably from HF Hub
+        #         from huggingface_hub import hf_hub_download
+
+        #         def load_from_hf(repo_id, filename, subfolder=None):
+        #             cache_file = hf_hub_download(repo_id=repo_id, filename=filename, subfolder=subfolder)
+        #             return torch.load(cache_file, map_location="cpu")
+
+        #         non_lora_trainables = load_from_hf(training_args.lora_weight_path, "non_lora_trainables.bin")
+        #     non_lora_trainables = {(k[11:] if k.startswith("base_model.") else k): v for k, v in non_lora_trainables.items()}
+        #     if any(k.startswith("model.model.") for k in non_lora_trainables):
+        #         non_lora_trainables = {(k[6:] if k.startswith("model.") else k): v for k, v in non_lora_trainables.items()}
+        #     model.load_state_dict(non_lora_trainables, strict=False)
+
+        #     from peft import PeftModel
+
+        #     rank0_print("Loading LoRA weights...")
+        #     model = PeftModel.from_pretrained(model, training_args.lora_weight_path)
+        #     rank0_print("Merging LoRA weights...")
+        #     model = model.merge_and_unload()
+        #     rank0_print("Model is loaded...")
+        #     lora_config = LoraConfig(
+        #         r=training_args.lora_r,
+        #         lora_alpha=training_args.lora_alpha,
+        #         target_modules=find_all_linear_names(model),
+        #         lora_dropout=training_args.lora_dropout,
+        #         bias=training_args.lora_bias,
+        #         task_type="CAUSAL_LM",
+        #     )
+        #     if training_args.bits == 16:
+        #         if training_args.bf16:
+        #             model.to(torch.bfloat16)
+        #         if training_args.fp16:
+        #             model.to(torch.float16)
+        #     rank0_print("Adding LoRA adapters...")
+        #     model = get_peft_model(model, lora_config)
+
 
     if "mistral" in model_args.model_name_or_path.lower() or "mixtral" in model_args.model_name_or_path.lower() or "zephyr" in model_args.model_name_or_path.lower():
         tokenizer = transformers.AutoTokenizer.from_pretrained(model_args.model_name_or_path, cache_dir=training_args.cache_dir, model_max_length=training_args.model_max_length, padding_side="left")
@@ -1705,15 +1771,23 @@ def train(attn_implementation=None):
     model.config.use_cache = True
 
     if training_args.lora_enable:
-        state_dict = get_peft_state_maybe_zero_3(model.named_parameters(), training_args.lora_bias)
-        non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(model.named_parameters())
-        if training_args.local_rank == 0 or training_args.local_rank == -1:
-            if hasattr(model, "config"):
-                model.config.save_pretrained(training_args.output_dir)
-            if hasattr(model, "generation_config"):
-                model.generation_config.save_pretrained(training_args.output_dir)
-            model.save_pretrained(training_args.output_dir, state_dict=state_dict)
-            torch.save(non_lora_state_dict, os.path.join(training_args.output_dir, "non_lora_trainables.bin"))
+        # state_dict = get_peft_state_maybe_zero_3(model.named_parameters(), training_args.lora_bias)
+        # non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(model.named_parameters())
+        # if training_args.local_rank == 0 or training_args.local_rank == -1:
+        #     if hasattr(model, "config"):
+        #         model.config.save_pretrained(training_args.output_dir)
+        #     if hasattr(model, "generation_config"):
+        #         model.generation_config.save_pretrained(training_args.output_dir)
+        #     # Save tokenizer for LoRA checkpoints
+        #     tokenizer.save_pretrained(training_args.output_dir)
+        #     model.save_pretrained(training_args.output_dir, state_dict=state_dict)
+        #     torch.save(non_lora_state_dict, os.path.join(training_args.output_dir, "non_lora_trainables.bin"))
+
+        # from peft to transformer model
+        #BTW calling model.merge_and_unload() on a PeftModel does not automatically unfreeze the requires_grad attribute of the model’s parameters.
+        model = model.merge_and_unload()
+        trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
+        safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
     else:
         safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
 

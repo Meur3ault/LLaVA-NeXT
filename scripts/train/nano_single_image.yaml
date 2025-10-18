@@ -20,17 +20,17 @@ datasets:
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/chrome_writting_train_8835.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/k12_printing_train_256646.json
-  #   sampling_strategy: "first:1%"
+  #   sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/iiit5k_annotations_2000.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/hme100k_train_clean_74502.json
   #   sampling_strategy: "first:10%"
   - json_path: ./data/images/single/ai2d_azuregpt_detailed_understanding_4874.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%" #16
   - json_path: ./data/images/single/infographic_vqa_4404.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   - json_path: ./data/images/single/infographic_azuregpt4v_1992.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/lrv_chart_1787.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/lrv_normal_gpt4v_filtered_10500.json
@@ -44,7 +44,7 @@ datasets:
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/textocr_gpt4v_train_converted_25114.json
   #   sampling_strategy: "all"
   - json_path: ./data/images/single/ai2d_train_internvl_single_12413.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/textcaps_train_21952.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/ureader_new/ureader_qa_sft.json
@@ -112,27 +112,27 @@ datasets:
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/magpie_pro_l3_80b_mt_300000_sp_token_fltd_299998.json
   #   sampling_strategy: "first:50%"
   - json_path: ./data/images/single/image_textualization_dataset_filtered.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/cambrian_filtered_gpt4vo_sp_token_fltd_max10k.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/real_vision_flan/sharegpt4o_dataset.jsonl
   #   sampling_strategy: "all"
   - json_path: ./data/images/single/ai2d_llava_format_2434.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/aokvqa_16539_llava_format.json
   #   sampling_strategy: "all"
   - json_path: ./data/images/single/chart2text_26961.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   - json_path: ./data/images/single/chartqa_18265_llava_format.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/clevr_70000_llava_format.json
-  #   sampling_strategy: "first:1%"
+  #   sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/diagram_image_to_text_300.json
   #   sampling_strategy: "all"
   - json_path: ./data/images/single/dvqa_200000_llava_format.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/figureqa_100000_llava_format.json
-  #   sampling_strategy: "first:1%"
+  #   sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/geomverse_9303.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/hateful_memes_8500_llava_format.json
@@ -146,7 +146,7 @@ datasets:
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/iconqa_llava_format_27307.json
   #   sampling_strategy: "first:5%"
   - json_path: ./data/images/single/infographic_vqa_2118_llava_format.json
-    sampling_strategy: "all"
+    sampling_strategy: "first:20%"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/intergps_1280_llava_format.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/mapqa_37417_llava_format.json
@@ -184,4 +184,4 @@ datasets:
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/vistext_9969.json
   #   sampling_strategy: "all"
   # - json_path: /mnt/bn/vl-research/data/llava_instruct/cauldron/websight_10000.json
-    sampling_strategy: "all"
+    # sampling_strategy: "all"
