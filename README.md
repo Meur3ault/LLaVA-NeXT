@@ -37,9 +37,9 @@ then recovering the interface:
 sudo systemctl isolate graphical.target
 ```
 
-This will bring near 12% speed up.
+This will bring nearly 12% speed up.
 
-## 1.1 Installation
+## 1.1 Installation (temporarily for Linux, not Windows)
 
 Firstly, you need to clone this modified repository and navigate to the LLaVA folder:
 
