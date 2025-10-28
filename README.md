@@ -60,7 +60,7 @@ pip install -r requirements.txt
 
 If you want to use the **[flash attention packages](https://github.com/Dao-AILab/flash-attention)** for evaluation and speeding up, please make sure the **cuda verison>=12.0**. Then run
 
-
+(You have to upgrade your torch version first)
 ```
 pip install flash-attn --no-build-isolation
 ```
